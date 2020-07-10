@@ -1,12 +1,12 @@
 use crate::disasm;
 
 struct ConditionCodes {
-    z: u8,
-    s: u8,
-    p: u8,
-    cy: u8,
-    ac: u8,
-    pad: u8
+    z: bool,
+    s: bool,
+    p: bool,
+    cy: bool,
+    ac: bool,
+    pad: bool
 }
 
 pub struct State<'a> {
@@ -46,12 +46,12 @@ impl State<'_> {
             pc: 0,
 
             cc: ConditionCodes {
-                z:   0,
-                s:   0,
-                p:   0,
-                cy:  0,
-                ac:  0,
-                pad: 0
+                z:   true,
+                s:   true,
+                p:   true,
+                cy:  true,
+                ac:  true,
+                pad: true
             },
 
             mem,
@@ -69,6 +69,36 @@ impl State<'_> {
 
     fn extend(first: u8, second: u8) -> usize {
         (((first as u16) << 8) | second as u16) as usize
+    }
+
+    fn zero_flag(&mut self, answer: u16) {
+        self.cc.z = (answer & 0xFF) == 0;
+    }
+
+    fn sign_flag(&mut self, answer: u16) {
+        self.cc.s = (answer & 0x80) != 0;
+    }
+
+    fn carry_flag(&mut self, answer: u16) {
+        self.cc.cy = answer > 0xFF;
+    }
+
+    fn parity(mut x: u16) -> bool {
+        x ^= x >> 8;
+        x ^= x >> 4;
+        x ^= x >> 2;
+        x ^= x >> 1;
+        ((!x) & 1) != 0
+    }
+
+    fn parity_flag(&mut self, answer: u16) {
+        self.cc.p = Self::parity(answer);
+    }
+
+    fn arith_flags(&mut self, answer: u16) {
+        self.zero_flag(answer);
+        self.sign_flag(answer);
+        self.parity_flag(answer & 0xFF);
     }
 
     fn step(&mut self) -> bool {
@@ -91,6 +121,32 @@ impl State<'_> {
                 // INX B
                 let offset = Self::extend(self.b, self.c);
                 self.mem[offset] = self.mem[offset] + 1;
+            }
+
+            0x04 => {
+                // INR B
+                let answer = self.b as u16 + 1; 
+                self.arith_flags(answer);
+                self.b = (answer & 0xff) as u8;
+            }
+
+            0x05 => {
+                // DCR B
+                let answer = self.b as u16 - 1; 
+                self.arith_flags(answer);
+                self.b = (answer & 0xff) as u8;
+            }
+
+            0x06 => {
+                // MVI B, byte
+                self.b = self.mem[self.pc + 1];
+                self.pc += 1;
+            }
+
+            0x07 => {
+                // RLC
+                let original = self.a;
+                self.a = (original >> 1) | (original << 1);
             }
 
             0x40 => { self.b = self.b; } // MOV B,B
@@ -206,7 +262,12 @@ impl State<'_> {
             }
             0x7F => { self.a = self.a; } // MOV A,A
 
-            op => { panic!("Opcode {:x} not implemented!", op) }
+            op => {
+                let mut friendly_name = String::new();
+                disasm::disasm_single(&mut friendly_name, self.mem, self.pc).expect("Faild to write to string");
+                friendly_name.pop();
+                panic!("Opcode {:x} (aka. `{}`) not implemented!", op, friendly_name)
+            }
         } 
 
         self.pc += 1;
