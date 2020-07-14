@@ -178,7 +178,7 @@ impl State<'_> {
             }
 
             0x0B => {
-                // INX B
+                // DCX B
                 let answer = Self::extend(self.b, self.c) - 1;
                 
                 Self::assign_ref((&mut self.b, &mut self.c), Self::seperate(answer));
@@ -260,6 +260,254 @@ impl State<'_> {
             }
 
             0x18 => {} // NOP
+
+            0x19 => {
+                // DAD D
+                let hl = Self::extend(self.h, self.l);
+                let de = Self::extend(self.d, self.e);
+
+                let answer: u16 = hl + de;
+
+                Self::assign_ref((&mut self.h, &mut self.l), Self::seperate(answer));
+                
+                self.carry_flag(answer);
+            }
+
+            0x1A => {
+                // LDAX D
+                let offset = Self::extend(self.d, self.e) as usize;
+                self.a = self.mem[offset];
+            }
+
+            0x1B => {
+                // DCX D
+                let answer = Self::extend(self.d, self.e) - 1;
+                
+                Self::assign_ref((&mut self.d, &mut self.e), Self::seperate(answer));
+            }
+
+            0x1C => {
+                // INR E
+                let answer = self.e as u16 + 1; 
+                self.arith_flags(answer);
+                self.e = (answer & 0xff) as u8;
+            }
+
+            0x1D => {
+                // DCR E
+                let answer = self.e as u16 - 1; 
+                self.arith_flags(answer);
+                self.e = (answer & 0xff) as u8;
+            }
+
+            0x1E => {
+                // MVI E, byte
+                self.e = self.mem[self.pc + 1];
+                self.pc += 1;
+            }
+
+            0x1F => {
+                // RAR
+                let previous = self.a;
+                self.a = (self.a >> 1) | (self.cc.cy as u8);
+                self.cc.cy = (previous & 0b10000000) == 0b10000000;
+            }
+            
+            0x20 => {} // NOP
+
+            0x21 => {
+                // LXI H, D16
+                self.h = self.mem[self.pc + 1];
+                self.l = self.mem[self.pc + 2];
+                self.pc += 2;
+            }
+            
+            0x22 => {
+                // SHLD
+                let offset = Self::extend(self.mem[self.pc + 1], self.mem[self.pc + 2]) as usize;
+                self.mem[offset] = self.l;
+                self.mem[offset + 1] = self.h;
+
+                self.pc += 2;
+            }
+
+            0x23 => {
+                // INX H
+                let answer = Self::extend(self.h, self.l) + 1;
+                
+                Self::assign_ref((&mut self.h, &mut self.l), Self::seperate(answer));
+            }
+
+            0x24 => {
+                // INR H
+                let answer = self.h as u16 + 1; 
+                self.arith_flags(answer);
+                self.h = (answer & 0xff) as u8;
+            }
+
+            0x25 => {
+                // DCR H
+                let answer = self.h as u16 - 1; 
+                self.arith_flags(answer);
+                self.h = (answer & 0xff) as u8;
+            }
+
+            0x26 => {
+                // MVI H, byte
+                self.h = self.mem[self.pc + 1];
+                self.pc += 1;
+            }
+
+            0x28 => {} // NOP
+
+            0x29 => {
+                // DAD H
+                let hl = Self::extend(self.h, self.l);
+
+                let answer: u16 = hl + hl;
+
+                Self::assign_ref((&mut self.h, &mut self.l), Self::seperate(answer));
+                
+                self.carry_flag(answer);
+            }
+
+            0x2A => {
+                // LDHD bytes
+                let offset = Self::extend(self.mem[self.pc + 1], self.mem[self.pc + 2]) as usize;
+                self.h = self.mem[offset];
+                self.l = self.mem[offset + 1];
+
+                self.pc += 2;
+            }
+
+            0x2B => {
+                // DCX H
+                let answer = Self::extend(self.h, self.l) - 1;
+                
+                Self::assign_ref((&mut self.h, &mut self.l), Self::seperate(answer));
+            }
+
+            0x2C => {
+                // INR L
+                let answer = self.l as u16 + 1; 
+                self.arith_flags(answer);
+                self.l = (answer & 0xff) as u8;
+            }
+
+            0x2D => {
+                // DCR L
+                let answer = self.l as u16 - 1; 
+                self.arith_flags(answer);
+                self.l = (answer & 0xff) as u8;
+            }
+
+            0x2E => {
+                // MVI L, byte
+                self.l = self.mem[self.pc + 1];
+                self.pc += 1;
+            }
+
+            0x2F => {
+                // CMA
+                self.a = !self.a;
+            }
+
+            0x30 => {} // NOP
+
+            0x31 => {
+                // LXI SP, D16
+                self.pc = Self::extend(self.mem[self.pc + 1], self.mem[self.pc + 2]) as usize;
+                self.pc += 2;
+            }
+            
+            0x32 => {
+                // STA addr
+                let offset = Self::extend(self.mem[self.pc + 2], self.mem[self.pc + 1]) as usize;
+                self.mem[offset] = self.a;
+
+                self.pc += 2;
+            }
+
+            0x33 => {
+                // INX SP
+                self.sp += 1;
+            }
+
+            0x34 => {
+                // INR M
+                let offset = Self::extend(self.h, self.l) as usize;
+                self.mem[offset] = self.mem[offset] + 1;
+                self.arith_flags(self.mem[offset].into());
+            }
+
+            0x35 => {
+                // DCR M
+                let offset = Self::extend(self.h, self.l) as usize;
+                self.mem[offset] = self.mem[offset] - 1;
+                self.arith_flags(self.mem[offset].into());
+            }
+
+            0x36 => {
+                // MVI H, byte
+                let offset = Self::extend(self.h, self.l) as usize;
+                self.mem[offset] = self.mem[self.pc + 1];
+                self.pc += 1;
+            }
+
+            0x37 => {
+                // STC
+                self.cc.cy = true;
+            }
+
+            0x38 => {} // NOP
+
+            0x39 => {
+                // DAD SP
+                let hl = Self::extend(self.h, self.l);
+
+                let answer: u16 = hl + self.sp;
+
+                Self::assign_ref((&mut self.h, &mut self.l), Self::seperate(answer));
+                
+                self.carry_flag(answer);
+            }
+
+            0x3A => {
+                // LDA, bytes
+                let offset = Self::extend(self.mem[self.pc + 1], self.mem[self.pc + 2]) as usize;
+                self.a = self.mem[offset];
+            }
+
+            0x3B => {
+                // DCX SP
+                self.sp -= 1;
+            }
+
+            0x3C => {
+                // INR A
+                let result = self.a + 1;
+                self.arith_flags(result.into());
+                self.a = result;
+            }
+            
+            0x3D => {
+                // DCR A
+                let result = self.a - 1;
+                self.arith_flags(result.into());
+                self.a = result;
+
+            }
+
+            0x3E => {
+                // MVI A, byte
+                self.a = self.mem[self.pc + 1];
+                self.pc += 1;
+            }
+
+            0x3F => {
+                // CMC
+                self.cc.cy = !self.cc.cy;
+            }
 
             0x40 => { self.b = self.b; } // MOV B,B
             0x41 => { self.b = self.c; } // MOV B,C
@@ -379,6 +627,272 @@ impl State<'_> {
                 self.a = self.mem[offset];
             }
             0x7F => { self.a = self.a; } // MOV A,A
+
+            0x80 => {
+                // ADD B
+                let result = self.a as u16 + self.b as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+            0x81 => {
+                // ADD C
+                let result = self.a as u16 + self.c as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+
+            0x82 => {
+                // ADD D
+                let result = self.a as u16 + self.d as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+            0x83 => {
+                // ADD E
+                let result = self.a as u16 + self.e as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+            0x84 => {
+                // ADD H
+                let result = self.a as u16 + self.f as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+            0x85 => {
+                // ADD L
+                let result = self.a as u16 + self.l as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+            0x86 => {
+                // ADD M
+                let offset = Self::extend(self.h, self.l) as usize;
+                let result = self.a as u16 + self.mem[offset] as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+            0x87 => {
+                // ADD A
+                let result = self.a as u16 + self.a as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+
+            0x88 => {
+                // ADC B
+                let result = self.a as u16 + self.b as u16 + self.cc.cy as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+            0x89 => {
+                // ADC C
+                let result = self.a as u16 + self.c as u16 + self.cc.cy as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+
+            0x8A => {
+                // ADC D
+                let result = self.a as u16 + self.d as u16 + self.cc.cy as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+            0x8B => {
+                // ADC E
+                let result = self.a as u16 + self.e as u16 + self.cc.cy as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+            0x8C => {
+                // ADC H
+                let result = self.a as u16 + self.f as u16 + self.cc.cy as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+            0x8D => {
+                // ADC L
+                let result = self.a as u16 + self.l as u16 + self.cc.cy as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+            0x8E => {
+                // ADC M
+                let offset = Self::extend(self.h, self.l) as usize;
+                let result = self.a as u16 + self.mem[offset] as u16 + self.cc.cy as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+            0x8F => {
+                // ADC A
+                let result = self.a as u16 + self.a as u16 + self.cc.cy as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+            0x90 => {
+                // SUB B
+                let result = self.a as u16 - self.b as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+            0x91 => {
+                // SUB C
+                let result = self.a as u16 - self.c as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+
+            0x92 => {
+                // SUB D
+                let result = self.a as u16 - self.d as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+            0x93 => {
+                // SUB E
+                let result = self.a as u16 - self.e as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+            0x94 => {
+                // SUB H
+                let result = self.a as u16 - self.f as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+            0x95 => {
+                // SUB L
+                let result = self.a as u16 - self.l as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+            0x96 => {
+                // SUB M
+                let offset = Self::extend(self.h, self.l) as usize;
+                let result = self.a as u16 - self.mem[offset] as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+            0x97 => {
+                // SUB A
+                let result = self.a as u16 - self.a as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+
+            0x98 => {
+                // SBB B
+                let result = self.a as u16 - self.b as u16 - self.cc.cy as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+            0x99 => {
+                // SBB  C
+                let result = self.a as u16 - self.c as u16 - self.cc.cy as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+
+            0x9A => {
+                // SBB D
+                let result = self.a as u16 - self.d as u16 - self.cc.cy as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+            0x9B => {
+                // SBB E
+                let result = self.a as u16 - self.e as u16 - self.cc.cy as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+            0x9C => {
+                // SBB H
+                let result = self.a as u16 - self.f as u16 - self.cc.cy as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+            0x9D => {
+                // SBB L
+                let result = self.a as u16 - self.l as u16 - self.cc.cy as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+            0x9E => {
+                // SBB M
+                let offset = Self::extend(self.h, self.l) as usize;
+                let result = self.a as u16 - self.mem[offset] as u16 - self.cc.cy as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
+
+            0x9F => {
+                // SBB A
+                let result = self.a as u16 - self.a as u16 - self.cc.cy as u16;
+                self.carry_flag(result);
+                self.arith_flags(result);
+                self.a = result as u8;
+            }
 
             op => {
                 let mut friendly_name = String::new();
@@ -570,6 +1084,29 @@ mod tests {
         assert_eq!(false, emu.cc.cy);
     }
 
+    #[test]
+    fn rotate_carry_right1() {
+        let mut mem = [0x1F, 0x76];
+        let mut emu = State::new(&mut mem);
+        emu.a = 0b10000000;
+        emu.cc.cy = false;
+
+        emu.start();
+        assert_eq!(0b01000000, emu.a);
+        assert_eq!(false, emu.cc.cy);
+    }
+
+    #[test]
+    fn rotate_carry_right2() {
+        let mut mem = [0x1F, 0x76];
+        let mut emu = State::new(&mut mem);
+        emu.a = 0b00000001;
+        emu.cc.cy = true;
+
+        emu.start();
+        assert_eq!(0b10000000, emu.a);
+        assert_eq!(true, emu.cc.cy);
+    }
 
 }
 
