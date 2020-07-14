@@ -204,6 +204,11 @@ impl State<'_> {
                 self.pc += 1;
             }
 
+            0x0F => {
+                // RRC
+                self.a = self.a.rotate_right(1);
+                self.cc.cy = (self.a & 0x01) == 0x01;
+            }
 
             0x40 => { self.b = self.b; } // MOV B,B
             0x41 => { self.b = self.c; } // MOV B,C
