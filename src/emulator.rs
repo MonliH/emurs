@@ -72,11 +72,11 @@ impl State<'_> {
     }
 
     fn zero_flag(&mut self, answer: u16) {
-        self.cc.z = (answer & 0xFF) == 0;
+        self.cc.z = answer == 0;
     }
 
     fn sign_flag(&mut self, answer: u16) {
-        self.cc.s = (answer & 0x80) != 0;
+        self.cc.s = (answer & 0b10000000) == 0b10000000;
     }
 
     fn carry_flag(&mut self, answer: u16) {
@@ -145,8 +145,8 @@ impl State<'_> {
 
             0x07 => {
                 // RLC
-                let original = self.a;
-                self.a = (original >> 1) | (original << 1);
+                self.a.rotate_left(1);
+                self.cc.cy = (self.a & 0x01) == 1;
             }
 
             0x40 => { self.b = self.b; } // MOV B,B
@@ -273,5 +273,96 @@ impl State<'_> {
         self.pc += 1;
         true
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn zero_flag_true() {
+        let mut emu = State::new(&mut []);
+
+        emu.zero_flag(0x00);
+
+        assert_eq!(emu.cc.z, true);
+    }
+
+    #[test]
+    fn zero_flag_false() {
+        let mut emu = State::new(&mut []);
+
+        emu.zero_flag(0xFF);
+
+        assert_eq!(emu.cc.z, false);
+    }
+
+    #[test]
+    fn sign_flag_false() {
+        let mut emu = State::new(&mut []);
+
+        emu.sign_flag(0b01111111);
+
+        assert_eq!(emu.cc.s, false);
+    }
+
+    #[test]
+    fn sign_flag_true() {
+        let mut emu = State::new(&mut []);
+
+        emu.sign_flag(0b11111111);
+
+        assert_eq!(emu.cc.s, true);
+    }
+
+    #[test]
+    fn carry_flag_false() {
+        let mut emu = State::new(&mut []);
+
+        emu.carry_flag(0x0001);
+
+        assert_eq!(emu.cc.cy, false);
+    }
+
+
+    #[test]
+    fn carry_flag_true() {
+        let mut emu = State::new(&mut []);
+
+        emu.carry_flag(0xFF01);
+
+        assert_eq!(emu.cc.cy, true);
+    }
+
+    #[test]
+    fn parity_true1() {
+        assert_eq!(State::parity(0b1111111111111111), true);
+    }
+
+    #[test]
+    fn parity_true2() {
+        assert_eq!(State::parity(0b1111111111110000), true);
+    }
+    
+    #[test]
+    fn parity_true3() {
+        assert_eq!(State::parity(0b1010101010100000), true);
+    }
+
+    #[test]
+    fn parity_false1() {
+        assert_eq!(State::parity(0b1111101111111111), false);
+    }
+
+    #[test]
+    fn parity_false2() {
+        assert_eq!(State::parity(0b1111101111110000), false);
+    }
+    
+    #[test]
+    fn parity_false3() {
+        assert_eq!(State::parity(0b1010100010100000), false);
+    }
+
 }
 
