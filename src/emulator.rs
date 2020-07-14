@@ -682,35 +682,17 @@ impl State<'_> {
             }
             0x8F => { self.add_cy(self.a); } // ADC A
 
-            0x90 => {
-                // SUB B
-                self.sub(self.b);
-            }
+            0x90 => { self.sub(self.b); } // SUB B
 
-            0x91 => {
-                // SUB C
-                self.sub(self.c);
-            }
+            0x91 => { self.sub(self.c); } // SUB C
 
-            0x92 => {
-                // SUB D
-                self.sub(self.d);
-            }
+            0x92 => { self.sub(self.d); } // SUB D
 
-            0x93 => {
-                // SUB E
-                self.sub(self.e);
-            }
+            0x93 => { self.sub(self.e); } // SUB E
 
-            0x94 => {
-                // SUB H
-                self.sub(self.h);
-            }
+            0x94 => { self.sub(self.h); } // SUB H
 
-            0x95 => {
-                // SUB L
-                self.sub(self.l);
-            }
+            0x95 => { self.sub(self.l); } // SUB L
 
             0x96 => {
                 // SUB M
@@ -718,79 +700,50 @@ impl State<'_> {
                 self.sub(self.mem[offset]);
             }
 
-            0x97 => {
-                // SUB A
-                self.sub(self.a);
-            }
+            0x97 => { self.sub(self.a); } // SUB A
 
 
             0x98 => {
                 // SBB B
-                let result = self.a as u16 - self.b as u16 - self.cc.cy as u16;
-                self.carry_flag(result);
-                self.arith_flags(result);
-                self.a = result as u8;
+                self.sub_cy(self.b);
             }
 
             0x99 => {
                 // SBB  C
-                let result = self.a as u16 - self.c as u16 - self.cc.cy as u16;
-                self.carry_flag(result);
-                self.arith_flags(result);
-                self.a = result as u8;
+                self.sub_cy(self.a);
             }
 
 
             0x9A => {
                 // SBB D
-                let result = self.a as u16 - self.d as u16 - self.cc.cy as u16;
-                self.carry_flag(result);
-                self.arith_flags(result);
-                self.a = result as u8;
+                self.sub_cy(self.d);
             }
 
             0x9B => {
                 // SBB E
-                let result = self.a as u16 - self.e as u16 - self.cc.cy as u16;
-                self.carry_flag(result);
-                self.arith_flags(result);
-                self.a = result as u8;
+                self.sub_cy(self.e);
             }
 
             0x9C => {
                 // SBB H
-                let result = self.a as u16 - self.f as u16 - self.cc.cy as u16;
-                self.carry_flag(result);
-                self.arith_flags(result);
-                self.a = result as u8;
+                self.sub_cy(self.h);
             }
 
             0x9D => {
                 // SBB L
-                let result = self.a as u16 - self.l as u16 - self.cc.cy as u16;
-                self.carry_flag(result);
-                self.arith_flags(result);
-                self.a = result as u8;
+                self.sub_cy(self.l);
             }
 
             0x9E => {
                 // SBB M
                 let offset = Self::extend(self.h, self.l) as usize;
-                let result = self.a as u16 - self.mem[offset] as u16 - self.cc.cy as u16;
-                self.carry_flag(result);
-                self.arith_flags(result);
-                self.a = result as u8;
+                self.sub_cy(self.mem[offset]);
             }
 
             0x9F => {
                 // SBB A
-                let result = self.a as u16 - self.a as u16 - self.cc.cy as u16;
-                self.carry_flag(result);
-                self.arith_flags(result);
-                self.a = result as u8;
+                self.sub_cy(self.a);
             }
-
-            
 
             op => {
                 let mut friendly_name = String::new();
