@@ -155,7 +155,7 @@ impl State<'_> {
 
             0x07 => {
                 // RLC
-                self.a = self.a.rotate_left(1);
+                self.a = (self.a >> 7) | self.a << 1;
                 self.cc.cy = (self.a & 0x01) == 0x01;
             }
 
@@ -206,9 +206,60 @@ impl State<'_> {
 
             0x0F => {
                 // RRC
-                self.a = self.a.rotate_right(1);
-                self.cc.cy = (self.a & 0x01) == 0x01;
+                let previous = self.a;
+                self.a = (self.a << 7) | self.a >> 1;
+                self.cc.cy = (previous & 0x01) == 0x01;
             }
+
+            0x10 => {} // NOP
+            0x11 => {
+                // LXI D, D16
+                self.d = self.mem[self.pc + 1];
+                self.e = self.mem[self.pc + 2];
+                self.pc += 2;
+            }
+            
+            0x12 => {
+                // STAX D
+                let offset = Self::extend(self.d, self.e) as usize;
+                self.mem[offset] = self.a;
+            }
+
+            0x13 => {
+                // INX D
+                let answer = Self::extend(self.d, self.e) + 1;
+                
+                Self::assign_ref((&mut self.d, &mut self.e), Self::seperate(answer));
+            }
+
+            0x14 => {
+                // INR D
+                let answer = self.d as u16 + 1; 
+                self.arith_flags(answer);
+                self.d = (answer & 0xff) as u8;
+            }
+
+            0x15 => {
+                // DCR D
+                let answer = self.d as u16 - 1; 
+                self.arith_flags(answer);
+                self.d = (answer & 0xff) as u8;
+            }
+
+            0x16 => {
+                // MVI D, byte
+                self.d = self.mem[self.pc + 1];
+                self.pc += 1;
+            }
+
+            0x17 => {
+                // RAL
+                let previous = self.a;
+                self.a = (self.a << 1) | (self.cc.cy as u8);
+                self.cc.cy = (previous & 0b10000000) == 0b10000000;
+            }
+
+            0x18 => {} // NOP
 
             0x40 => { self.b = self.b; } // MOV B,B
             0x41 => { self.b = self.c; } // MOV B,C
@@ -306,6 +357,12 @@ impl State<'_> {
                 let offset: usize = Self::extend(self.h, self.l) as usize;
                 self.mem[offset] = self.l;
             }
+
+            0x76 => {
+                // HLT
+                return false;
+            }
+
             0x77 => {                    // MOV M,A
                 let offset: usize = Self::extend(self.h, self.l) as usize;
                 self.mem[offset] = self.a;
@@ -444,6 +501,75 @@ mod tests {
     fn seperate2() {
         assert_eq!((0xFF, 0xFF), State::seperate(0xFFFF));
     }
+
+    #[test]
+    fn rotate_left1() {
+        let mut mem = [0x07, 0x76];
+        let mut emu = State::new(&mut mem);
+        emu.a = 0b10000000;
+
+        emu.start();
+        assert_eq!(0b00000001, emu.a);
+        assert_eq!(true, emu.cc.cy);
+    }
+
+    #[test]
+    fn rotate_left2() {
+        let mut mem = [0x07, 0x76];
+        let mut emu = State::new(&mut mem);
+        emu.a = 0b01000000;
+
+        emu.start();
+        assert_eq!(0b10000000, emu.a);
+        assert_eq!(false, emu.cc.cy);
+    }
+
+    #[test]
+    fn rotate_right1() {
+        let mut mem = [0x0F, 0x76];
+        let mut emu = State::new(&mut mem);
+        emu.a = 0b10000000;
+
+        emu.start();
+        assert_eq!(0b01000000, emu.a);
+        assert_eq!(false, emu.cc.cy);
+    }
+
+    #[test]
+    fn rotate_right2() {
+        let mut mem = [0x0F, 0x76];
+        let mut emu = State::new(&mut mem);
+        emu.a = 0b00000001;
+
+        emu.start();
+        assert_eq!(0b10000000, emu.a);
+        assert_eq!(true, emu.cc.cy);
+    }
+
+    #[test]
+    fn rotate_carry_left1() {
+        let mut mem = [0x17, 0x76];
+        let mut emu = State::new(&mut mem);
+        emu.a = 0b10000000;
+        emu.cc.cy = false;
+
+        emu.start();
+        assert_eq!(0b00000000, emu.a);
+        assert_eq!(true, emu.cc.cy);
+    }
+
+    #[test]
+    fn rotate_carry_left2() {
+        let mut mem = [0x17, 0x76];
+        let mut emu = State::new(&mut mem);
+        emu.a = 0b00000001;
+        emu.cc.cy = true;
+
+        emu.start();
+        assert_eq!(0b00000011, emu.a);
+        assert_eq!(false, emu.cc.cy);
+    }
+
 
 }
 
