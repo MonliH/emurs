@@ -20,7 +20,7 @@ pub struct State<'a> {
     h: u8,
     l: u8,
 
-    sp: u16,
+    sp: usize,
     pc: usize,
 
     cc: ConditionCodes,
@@ -42,7 +42,7 @@ impl State<'_> {
             h: 0,
             l: 0,
 
-            sp: 0,
+            sp: 0xf000,
             pc: 0,
 
             cc: ConditionCodes {
@@ -64,6 +64,18 @@ impl State<'_> {
         let mut running = true;
         while running {
             running = self.step();
+        }
+    }
+
+    pub fn steps(&mut self) {
+        loop {
+            let mut command = String::new();
+            std::io::stdin().read_line(&mut command).expect("Did not enter a correct string");
+            let mut rep = String::new();
+            disasm::disasm_single(&mut rep, self.mem, self.pc).expect("Failed to write");
+            rep.pop();
+            println!("af: {:02x}{:02x}, bc: {:02x}{:02x}, de: {:02x}{:02x}, hl:{:02x}{:02x}, pc: {:04x}, sp: {:04x}\n{} opcode: {:02x}",self.a, self.f, self.b, self.c, self.d, self.e, self.h, self.l, self.pc, self.sp, rep, self.mem[self.pc]);
+            self.step();
         }
     }
 
@@ -105,7 +117,7 @@ impl State<'_> {
         self.parity_flag(answer & 0xFF);
     }
 
-    fn assign_ref(assigns: (&mut u8, &mut u8), value: (u8, u8)) {
+    fn assign_ref<T>(assigns: (&mut T, &mut T), value: (T, T)) {
         *assigns.0 = value.1;
         *assigns.1 = value.0;
     }
@@ -138,13 +150,72 @@ impl State<'_> {
         self.a = result as u8;
     }
 
+    fn and(&mut self, value: u8) {
+        let result = self.a & value;
+        self.cc.cy = false;
+        self.arith_flags(result as u16);
+
+        self.a = result as u8;
+    }
+
+    fn xor(&mut self, value: u8) {
+        let result = self.a ^ value;
+        self.cc.cy = false;
+        self.arith_flags(result as u16);
+
+        self.a = result as u8;
+    }
+    
+    fn or(&mut self, value: u8) {
+        let result = self.a | value;
+        self.cc.cy = false;
+        self.arith_flags(result as u16);
+
+        self.a = result as u8;
+    }
+    
+    fn cmp(&mut self, value: u8) {
+        let result = self.a as u16 - value as u16;
+        self.cc.z = self.a == value;
+        self.cc.cy = self.a < value;
+        self.sign_flag(result);
+        self.parity_flag(result);
+    }
+
+    fn ret(&mut self) {
+        self.pc = Self::extend(self.mem[self.sp], self.mem[self.sp + 1]) as usize;
+        self.sp += 2;
+    }
+
+    fn jmp(&mut self) {
+        self.pc = Self::extend(self.mem[self.pc + 2], self.mem[self.pc + 1]) as usize;
+        // Counteract the dding in each opcode
+        self.pc -= 1;
+    }
+
+    fn call_jmp(&mut self) {
+        let split = Self::seperate(self.pc as u16);
+
+        self.mem[self.sp - 1] = split.0;
+        self.mem[self.sp - 2] = split.1;
+
+        self.sp -= 2;
+        self.pc -= 1;
+    }
+
+    fn call(&mut self) {
+        let bytes = Self::extend(self.mem[self.pc + 2], self.mem[self.pc + 1]);
+        self.pc = bytes as usize;
+        self.call_jmp();
+    }
+
     fn step(&mut self) -> bool {
         match self.mem[self.pc] {
             0x00 => {} // NOP
             0x01 => {
                 // LXI B, word
-                self.c = self.mem[self.pc + 1];
-                self.b = self.mem[self.pc + 2];
+                self.c = self.mem[self.pc + 2];
+                self.b = self.mem[self.pc + 1];
                 self.pc += 2;
             }
 
@@ -242,8 +313,8 @@ impl State<'_> {
             0x10 => {} // NOP
             0x11 => {
                 // LXI D, D16
-                self.d = self.mem[self.pc + 1];
-                self.e = self.mem[self.pc + 2];
+                self.d = self.mem[self.pc + 2];
+                self.e = self.mem[self.pc + 1];
                 self.pc += 2;
             }
             
@@ -345,8 +416,8 @@ impl State<'_> {
 
             0x21 => {
                 // LXI H, D16
-                self.h = self.mem[self.pc + 1];
-                self.l = self.mem[self.pc + 2];
+                self.h = self.mem[self.pc + 2];
+                self.l = self.mem[self.pc + 1];
                 self.pc += 2;
             }
             
@@ -444,7 +515,7 @@ impl State<'_> {
 
             0x31 => {
                 // LXI SP, D16
-                self.pc = Self::extend(self.mem[self.pc + 1], self.mem[self.pc + 2]) as usize;
+                self.sp = Self::extend(self.mem[self.pc + 2], self.mem[self.pc + 1]) as usize;
                 self.pc += 2;
             }
             
@@ -493,7 +564,7 @@ impl State<'_> {
                 // DAD SP
                 let hl = Self::extend(self.h, self.l);
 
-                let answer: u16 = hl + self.sp;
+                let answer: u16 = hl + self.sp as u16;
 
                 Self::assign_ref((&mut self.h, &mut self.l), Self::seperate(answer));
                 
@@ -683,73 +754,259 @@ impl State<'_> {
             0x8F => { self.add_cy(self.a); } // ADC A
 
             0x90 => { self.sub(self.b); } // SUB B
-
             0x91 => { self.sub(self.c); } // SUB C
-
             0x92 => { self.sub(self.d); } // SUB D
-
             0x93 => { self.sub(self.e); } // SUB E
-
             0x94 => { self.sub(self.h); } // SUB H
-
             0x95 => { self.sub(self.l); } // SUB L
-
             0x96 => {
                 // SUB M
                 let offset = Self::extend(self.h, self.l) as usize;
                 self.sub(self.mem[offset]);
             }
-
             0x97 => { self.sub(self.a); } // SUB A
 
-
-            0x98 => {
-                // SBB B
-                self.sub_cy(self.b);
-            }
-
-            0x99 => {
-                // SBB  C
-                self.sub_cy(self.a);
-            }
-
-
-            0x9A => {
-                // SBB D
-                self.sub_cy(self.d);
-            }
-
-            0x9B => {
-                // SBB E
-                self.sub_cy(self.e);
-            }
-
-            0x9C => {
-                // SBB H
-                self.sub_cy(self.h);
-            }
-
-            0x9D => {
-                // SBB L
-                self.sub_cy(self.l);
-            }
-
+            0x98 => { self.sub_cy(self.b); } // SBB B
+            0x99 => { self.sub_cy(self.a); } // SBB C
+            0x9A => { self.sub_cy(self.d); } // SBB D
+            0x9B => { self.sub_cy(self.e); } // SBB E
+            0x9C => { self.sub_cy(self.h); } // SBB H
+            0x9D => { self.sub_cy(self.l); } // SBB L
             0x9E => {
                 // SBB M
                 let offset = Self::extend(self.h, self.l) as usize;
                 self.sub_cy(self.mem[offset]);
             }
+            0x9F => { self.sub_cy(self.a); } // SBB A
 
-            0x9F => {
-                // SBB A
-                self.sub_cy(self.a);
+            0xA0 => { self.and(self.b); } // ANA B
+            0xA1 => { self.and(self.c); } // ANA C
+            0xA2 => { self.and(self.d); } // ANA D
+            0xA3 => { self.and(self.e); } // ANA E
+            0xA4 => { self.and(self.h); } // ANA H
+            0xA5 => { self.and(self.l); } // ANA L
+            0xA6 => {
+                // ANA M
+                let offset = Self::extend(self.h, self.l) as usize;
+                self.and(self.mem[offset]);
+            }
+            0xA7 => { self.and(self.a); } // ANA A
+
+            0xA8 => { self.xor(self.b); } // XRA B
+            0xA9 => { self.xor(self.a); } // XRA C
+            0xAA => { self.xor(self.d); } // XRA D
+            0xAB => { self.xor(self.e); } // XRA E
+            0xAC => { self.xor(self.h); } // XRA H
+            0xAD => { self.xor(self.l); } // XRA L
+            0xAE => {
+                // XRA M
+                let offset = Self::extend(self.h, self.l) as usize;
+                self.xor(self.mem[offset]);
+            }
+            0xAF => { self.xor(self.a); } // XRA A
+
+            0xB0 => { self.or(self.b); } // ORA B
+            0xB1 => { self.or(self.c); } // ORA C
+            0xB2 => { self.or(self.d); } // ORA D
+            0xB3 => { self.or(self.e); } // ORA E
+            0xB4 => { self.or(self.h); } // ORA H
+            0xB5 => { self.or(self.l); } // ORA L
+            0xB6 => {
+                // ORA M
+                let offset = Self::extend(self.h, self.l) as usize;
+                self.or(self.mem[offset]);
+            }
+            0xB7 => { self.or(self.a); } // ORA A
+
+            0xB8 => { self.cmp(self.b); } // CMP B
+            0xB9 => { self.cmp(self.a); } // CMP C
+            0xBA => { self.cmp(self.d); } // CMP D
+            0xBB => { self.cmp(self.e); } // CMP E
+            0xBC => { self.cmp(self.h); } // CMP H
+            0xBD => { self.cmp(self.l); } // CMP L
+            0xBE => {
+                // CMP M
+                let offset = Self::extend(self.h, self.l) as usize;
+                self.cmp(self.mem[offset]);
+            }
+            0xBF => { self.cmp(self.a); } // CMP A
+
+            0xC0 => {
+                // RNZ
+                if !self.cc.z {
+                    self.ret();
+                }
+            }
+
+            0xC1 => {
+                // POP B
+                Self::assign_ref((&mut self.c, &mut self.b), (self.mem[self.sp], self.mem[self.sp + 1]));
+                self.sp += 2;
+            }
+
+            0xC2 => {
+                // JNZ bytes
+                if !self.cc.z {
+                    self.jmp();
+                } else {
+                    self.pc += 2;
+                }
+            }
+
+            0xC3 => {
+                // JMP bytes
+                self.jmp();
+            }
+
+            0xC4 => {
+                // CNZ bytes
+                if !self.cc.z {
+                    self.call();
+                } else {
+                    self.pc += 2;
+                }
+            }
+
+            0xC5 => {
+                // PUSH B
+                self.mem[self.sp - 1] = self.b;
+                self.mem[self.sp - 2] = self.c;
+                self.sp -= 2;
+            }
+
+            0xC6 => {
+                // ADI byte
+                self.add(self.mem[self.pc + 1]);
+                self.pc += 1;
+            }
+
+            0xC7 => {
+                // RST 0
+                self.call_jmp();
+                self.pc = 0;
+            }
+
+            0xC8 => {
+                // RZ
+                if self.cc.z {
+                    self.call();
+                } else {
+                    self.pc += 2;
+                }
+            }
+
+            0xC9 => {
+                // RET
+                self.ret();
+            }
+
+            0xCA => {
+                // JZ bytes
+                if self.cc.z {
+                    self.jmp();
+                } else {
+                    self.pc += 2;
+                }
+            }
+
+            0xCB => {
+                // JMP bytes
+                self.jmp();
+            }
+
+            0xCC => {
+                // CZ bytes
+                if self.cc.z {
+                    self.call();
+                } else {
+                    self.pc += 2;
+                }
+            }
+
+            0xCD => {
+                // CALL bytes
+                self.call();
+            }
+
+            0xCE => {
+                // ACI byte
+                self.add_cy(self.mem[self.pc + 1]);
+                self.pc += 1;
+            }
+
+            0xCF => {
+                // RST 1
+                self.call_jmp();
+                self.pc = 8;
+            }
+
+            0xD0 => {
+                // RNC
+                if !self.cc.cy {
+                    self.ret();
+                }
+            }
+
+            0xD1 => {
+                // POP D
+                Self::assign_ref((&mut self.e, &mut self.d), (self.mem[self.sp], self.mem[self.sp + 1]));
+                self.sp += 2;
+            }
+
+            0xD2 => {
+                // JNC bytes
+                if !self.cc.cy {
+                    self.jmp();
+                } else {
+                    self.pc += 2;
+                }
+            }
+
+            0xD4 => {
+                // CNC bytes
+                if !self.cc.cy {
+                    self.call();
+                } else {
+                    self.pc += 2;
+                }
+            }
+
+            0xD5 => {
+                // PUSH D
+                self.mem[self.sp - 1] = self.d;
+                self.mem[self.sp - 2] = self.e;
+                self.sp -= 2;
+            }
+
+            0xD6 => {
+                // SUI byte
+                self.sub_cy(self.mem[self.pc + 1]);
+                self.pc += 1;
+            }
+
+            0xD7 => {
+                // RST 2
+                self.call_jmp();
+                self.pc = 16;
+            }
+
+            0xD8 => {
+                // RC
+                if self.cc.cy {
+                    self.ret();
+                }
+            }
+
+            0xD9 => {
+                // RET
+                self.ret();
             }
 
             op => {
                 let mut friendly_name = String::new();
                 disasm::disasm_single(&mut friendly_name, self.mem, self.pc).expect("Faild to write to string");
                 friendly_name.pop();
-                panic!("Opcode {:x} (aka. `{}`) not implemented!", op, friendly_name)
+                panic!("Opcode {:x} (aka. `{}`) not implemented!", op, friendly_name);
             }
         } 
 
