@@ -69,13 +69,18 @@ impl State<'_> {
 
     pub fn steps(&mut self) {
         loop {
-            let mut command = String::new();
-            std::io::stdin().read_line(&mut command).expect("Did not enter a correct string");
+            let mut amount = String::new();
+            std::io::stdin().read_line(&mut amount).expect("Did not enter a correct string");
+            amount.pop();
+
+            for _ in 0..amount.parse::<i32>().unwrap_or(1) {
+                self.step();
+            }
+
             let mut rep = String::new();
             disasm::disasm_single(&mut rep, self.mem, self.pc).expect("Failed to write");
             rep.pop();
-            println!("af: {:02x}{:02x}, bc: {:02x}{:02x}, de: {:02x}{:02x}, hl:{:02x}{:02x}, pc: {:04x}, sp: {:04x}\n{} opcode: {:02x}",self.a, self.f, self.b, self.c, self.d, self.e, self.h, self.l, self.pc, self.sp, rep, self.mem[self.pc]);
-            self.step();
+            println!("af: {:02x}{:02x}, bc: {:02x}{:02x}, de: {:02x}{:02x}, hl:{:02x}{:02x}, pc: {:04x}, sp: {:04x}\n{} opcode: {:02x} {:02x} {:02x}",self.a, self.f, self.b, self.c, self.d, self.e, self.h, self.l, self.pc, self.sp, rep, self.mem[self.pc], self.mem[self.pc + 1], self.mem[self.pc + 2]);
         }
     }
 
@@ -183,8 +188,10 @@ impl State<'_> {
     }
 
     fn ret(&mut self) {
-        self.pc = Self::extend(self.mem[self.sp], self.mem[self.sp + 1]) as usize;
+        self.pc = Self::extend(self.mem[self.sp + 1], self.mem[self.sp]) as usize;
         self.sp += 2;
+
+        self.pc -= 1;
     }
 
     fn jmp(&mut self) {
@@ -207,7 +214,7 @@ impl State<'_> {
         let bytes = Self::extend(self.mem[self.pc + 2], self.mem[self.pc + 1]);
         self.pc = bytes as usize;
         self.call_jmp();
-    }
+   }
 
     fn step(&mut self) -> bool {
         match self.mem[self.pc] {
@@ -229,7 +236,7 @@ impl State<'_> {
                 // INX B
                 let answer = Self::extend(self.b, self.c) + 1;
                 
-                Self::assign_ref((&mut self.b, &mut self.c), Self::seperate(answer));
+                Self::assign_ref((&mut self.c, &mut self.b), Self::seperate(answer));
             }
 
             0x04 => {
@@ -328,7 +335,7 @@ impl State<'_> {
                 // INX D
                 let answer = Self::extend(self.d, self.e) + 1;
                 
-                Self::assign_ref((&mut self.d, &mut self.e), Self::seperate(answer));
+                Self::assign_ref((&mut self.e, &mut self.d), Self::seperate(answer));
             }
 
             0x14 => {
@@ -434,7 +441,7 @@ impl State<'_> {
                 // INX H
                 let answer = Self::extend(self.h, self.l) + 1;
                 
-                Self::assign_ref((&mut self.h, &mut self.l), Self::seperate(answer));
+                Self::assign_ref((&mut self.l, &mut self.h), Self::seperate(answer));
             }
 
             0x24 => {
