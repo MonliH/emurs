@@ -188,6 +188,7 @@ impl State<'_> {
     }
 
     fn ret(&mut self) {
+        println!("ret mem: {:02x}{:02x}", self.mem[self.sp + 1], self.mem[self.sp]);
         self.pc = Self::extend(self.mem[self.sp + 1], self.mem[self.sp]) as usize;
         self.sp += 2;
 
@@ -196,15 +197,17 @@ impl State<'_> {
 
     fn jmp(&mut self) {
         self.pc = Self::extend(self.mem[self.pc + 2], self.mem[self.pc + 1]) as usize;
-        // Counteract the dding in each opcode
         self.pc -= 1;
     }
 
     fn call_jmp(&mut self) {
-        let split = Self::seperate(self.pc as u16);
+        // PC of next instruction
+        let split = Self::seperate((self.pc + 3) as u16);
 
         self.mem[self.sp - 1] = split.0;
         self.mem[self.sp - 2] = split.1;
+
+        println!("call mem: {:02x}{:02x}", split.0, split.1);
 
         self.sp -= 2;
         self.pc -= 1;
@@ -212,8 +215,9 @@ impl State<'_> {
 
     fn call(&mut self) {
         let bytes = Self::extend(self.mem[self.pc + 2], self.mem[self.pc + 1]);
-        self.pc = bytes as usize;
         self.call_jmp();
+        self.pc = bytes as usize;
+        self.pc -= 1;
    }
 
     fn step(&mut self) -> bool {
