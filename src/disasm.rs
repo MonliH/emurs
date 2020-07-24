@@ -279,7 +279,7 @@ pub fn disasm_single(asm: &mut String, code: &[u8], pos: usize) -> Result<usize,
         0xE2 => { writeln!(asm, "JPO     ${:02x}{:02x}", code[pos + 2], code[pos + 1])?; op_len = 3; }
         
         0xE3 => { writeln!(asm, "XTHL")?; }
-        0xE4 => { writeln!(asm, "CTO     ${:02x}{:02x}", code[pos + 2], code[pos + 1])?; op_len = 3; }
+        0xE4 => { writeln!(asm, "CPO     ${:02x}{:02x}", code[pos + 2], code[pos + 1])?; op_len = 3; }
         0xE5 => { writeln!(asm, "PUSH    H")?; }
         0xE6 => { writeln!(asm, "ANI     #${:02x}", code[pos + 1])?; op_len = 2; } 
         0xE7 => { writeln!(asm, "RST     4")?; }

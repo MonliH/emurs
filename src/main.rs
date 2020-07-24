@@ -18,8 +18,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     println!("{}", asm);
 
     let mut runner = emulator::State::new(&mut file_contents);
-    runner.steps();
-    //runner.start();
+    //runner.steps();
+    runner.start();
 
     Ok(())
 }

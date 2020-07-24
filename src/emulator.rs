@@ -851,7 +851,8 @@ impl State<'_> {
 
             0xC1 => {
                 // POP B
-                Self::assign_ref((&mut self.c, &mut self.b), (self.mem[self.sp], self.mem[self.sp + 1]));
+                self.c = self.mem[self.sp];
+                self.b = self.mem[self.sp + 1];
                 self.sp += 2;
             }
 
@@ -960,7 +961,8 @@ impl State<'_> {
 
             0xD1 => {
                 // POP D
-                Self::assign_ref((&mut self.e, &mut self.d), (self.mem[self.sp], self.mem[self.sp + 1]));
+                self.e = self.mem[self.sp];
+                self.d = self.mem[self.sp + 1];
                 self.sp += 2;
             }
 
@@ -991,7 +993,7 @@ impl State<'_> {
 
             0xD6 => {
                 // SUI byte
-                self.sub_cy(self.mem[self.pc + 1]);
+                self.sub(self.mem[self.pc + 1]);
                 self.pc += 1;
             }
 
@@ -1011,6 +1013,257 @@ impl State<'_> {
             0xD9 => {
                 // RET
                 self.ret();
+            }
+
+            0xDA => {
+                // JC bytes
+                if self.cc.cy {
+                    self.jmp();
+                } else {
+                    self.pc += 2;
+                }
+            }
+
+            0xDC => {
+                // CC bytes
+                if self.cc.cy {
+                    self.call();
+                } else {
+                    self.pc += 2;
+                }
+            }
+
+            0xDD => {
+                // CALL bytes
+                self.call();
+            }
+
+            0xDE => {
+                // SBI byte
+                self.sub_cy(self.mem[self.pc + 1]);
+                self.pc += 1;
+            }
+
+            0xDF => {
+                // RST 3
+                self.call_jmp();
+                self.pc = 24;
+            }
+
+            0xE0 => {
+                // RPO
+                if !self.cc.p {
+                    self.ret();
+                }
+            }
+
+            0xE1 => {
+                // POP H
+                self.l = self.mem[self.sp];
+                self.h = self.mem[self.sp + 1];
+                self.sp += 2;
+            }
+
+            0xE2 => {
+                // JPO bytes
+                if !self.cc.p {
+                    self.jmp();
+                } else {
+                    self.pc += 2;
+                }
+            }
+
+            0xE3 => {
+                // XTHL
+                std::mem::swap(&mut self.l, &mut self.mem[self.sp]);
+                std::mem::swap(&mut self.h, &mut self.mem[self.sp + 1]);
+            }
+
+            0xE4 => {
+                // CPO bytes
+                if !self.cc.p {
+                    self.call();
+                } else {
+                    self.pc += 2;
+                }
+            }
+
+            0xE5 => {
+                // PUSH H
+                self.mem[self.sp - 1] = self.h;
+                self.mem[self.sp - 2] = self.l;
+                self.sp -= 2;
+            }
+
+            0xE6 => {
+                // ANI byte
+                let answer = self.a & self.mem[self.pc + 1];
+                self.a = answer;
+                self.arith_flags(answer as u16);
+                self.cc.cy = false;
+            }
+
+            0xE7 => {
+                // RST 4
+                self.call_jmp();
+                self.pc = 32;
+            }
+
+            0xE8 => {
+                // RPE
+                if self.cc.p {
+                    self.ret();
+                }
+            }
+
+            0xE9 => {
+                // PCHL
+                self.pc = Self::extend(self.h, self.l) as usize;
+            }
+
+            0xEA => {
+                // JPE bytes
+                if self.cc.p {
+                    self.jmp();
+                } else {
+                    self.pc += 2;
+                }
+            }
+
+            0xEB => {
+                // XCHG
+                std::mem::swap(&mut self.h, &mut self.d);
+                std::mem::swap(&mut self.l, &mut self.e);
+            }
+
+            0xEC => {
+                // CPE bytes
+                if self.cc.p {
+                    self.call();
+                } else {
+                    self.pc += 2;
+                }
+            }
+
+            0xED => {
+                // CALL bytes
+                self.call()
+            }
+
+            0xEE => {
+                // XRI byte
+                let answer = self.a ^ self.mem[self.pc + 1];
+                self.a = answer;
+                self.arith_flags(answer as u16);
+                self.cc.cy = false;
+            }
+
+            0xEF => {
+                // RST 5
+                self.call_jmp();
+                self.pc = 40;
+            }
+
+            0xF0 => {
+                // RP
+                if self.cc.p {
+                    self.ret();
+                }
+            }
+
+            0xF1 => {
+                // POP PSW
+                self.cc.cy = (self.mem[self.sp] & 0b00000001) == 0b00000001;
+                self.cc.p = (self.mem[self.sp] & 0b00000100) == 0b00000100;
+                self.cc.z = (self.mem[self.sp] & 0b01000000) == 0b01000000;
+                self.cc.s = (self.mem[self.sp] & 0b10000000) == 0b10000000;
+                self.a = self.mem[self.sp + 1];
+                self.sp += 2;
+            }
+
+            0xF2 => {
+                // JP bytes
+                if !self.cc.s {
+                    self.jmp();
+                } else {
+                    self.pc += 2;
+                }
+            }
+
+            0xF4 => {
+                // CP btyes
+                if !self.cc.s {
+                    self.call();
+                }
+            }
+
+            0xF5 => {
+                // PUSH PSW
+                self.mem[self.sp-1] = self.a;
+                let psw = self.cc.cy as u8 | 0b10 | (self.cc.p as u8) << 2 | (self.cc.z as u8) << 6 | (self.cc.s as u8) << 7;
+                self.mem[self.sp-2] = psw;
+                self.sp -= 2;
+            }
+
+            0xF6 => {
+                // ORI byte
+                let answer = self.a | self.mem[self.pc + 1];
+                self.a = answer;
+                self.arith_flags(answer as u16);
+                self.cc.cy = false;
+            }
+
+            0xF7 => {
+                // RST 6
+                self.call_jmp();
+                self.pc = 48;
+            }
+
+            0xF8 => {
+                // RM
+                if self.cc.s {
+                    self.ret();
+                }
+            }
+
+            0xF9 => {
+                // SPHL
+                self.sp = Self::extend(self.h, self.l) as usize;
+            }
+            
+            0xFA => {
+                // JM bytes
+                if self.cc.s {
+                    self.jmp();
+                } else {
+                    self.pc += 2;
+                }
+            }
+            
+            0xFC => {
+                // CM
+                if self.cc.s {
+                    self.call();
+                } else {
+                    self.pc += 2;
+                }
+            }
+
+            0xFD => {
+                // CALL bytes
+                self.call();
+            }
+
+            0xFE => {
+                // CPI byte
+                self.sub(self.mem[self.pc + 1]);
+                self.pc += 1;
+            }
+
+            0xFF => {
+                // RST 7
+                self.call_jmp();
+                self.pc = 56;
             }
 
             op => {
