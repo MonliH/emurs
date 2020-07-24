@@ -26,7 +26,7 @@ pub struct State<'a> {
     cc: ConditionCodes,
     mem: &'a mut [u8],
 
-    int_enable: u16
+    int_enable: bool
 }
 
 impl State<'_> {
@@ -56,7 +56,7 @@ impl State<'_> {
 
             mem,
 
-            int_enable: 0
+            int_enable: true
         }
     }
 
@@ -275,6 +275,18 @@ impl State<'_> {
                 let bc = Self::extend(self.b, self.c);
 
                 let answer: u16 = hl + bc;
+
+                Self::assign_ref((&mut self.h, &mut self.l), Self::seperate(answer));
+                
+                self.carry_flag(answer);
+            }
+
+            0x09 => {
+                // DAD B
+                let hl = Self::extend(self.h, self.l);
+                let de = Self::extend(self.b, self.c);
+
+                let answer: u16 = hl + de;
 
                 Self::assign_ref((&mut self.h, &mut self.l), Self::seperate(answer));
                 
@@ -975,6 +987,11 @@ impl State<'_> {
                 }
             }
 
+            0xD3 => {
+                // Out byte
+                self.pc += 1;
+            }
+
             0xD4 => {
                 // CNC bytes
                 if !self.cc.cy {
@@ -1022,6 +1039,11 @@ impl State<'_> {
                 } else {
                     self.pc += 2;
                 }
+            }
+
+            0xDB => {
+                // In byte
+                self.pc += 1;
             }
 
             0xDC => {
@@ -1189,6 +1211,10 @@ impl State<'_> {
                     self.pc += 2;
                 }
             }
+            
+            0xF3 => {
+                self.int_enable = false;
+            }
 
             0xF4 => {
                 // CP btyes
@@ -1238,6 +1264,10 @@ impl State<'_> {
                 } else {
                     self.pc += 2;
                 }
+            }
+
+            0xFB => {
+                self.int_enable = true;
             }
             
             0xFC => {
