@@ -125,8 +125,8 @@ impl State<'_> {
     }
 
     fn assign_ref<T>(assigns: (&mut T, &mut T), value: (T, T)) {
-        *assigns.0 = value.1;
-        *assigns.1 = value.0;
+        *assigns.0 = value.0;
+        *assigns.1 = value.1;
     }
 
     fn add(&mut self, value: u8) {
@@ -224,8 +224,8 @@ impl State<'_> {
             0x00 => {} // NOP
             0x01 => {
                 // LXI B, word
-                self.c = self.mem[self.pc + 2];
-                self.b = self.mem[self.pc + 1];
+                self.b = self.mem[self.pc + 2];
+                self.c = self.mem[self.pc + 1];
                 self.pc += 2;
             }
 
@@ -239,7 +239,7 @@ impl State<'_> {
                 // INX B
                 let answer = Self::extend(self.b, self.c) + 1;
 
-                Self::assign_ref((&mut self.c, &mut self.b), Self::separate(answer));
+                Self::assign_ref((&mut self.b, &mut self.c), Self::separate(answer));
             }
 
             0x04 => {
@@ -268,17 +268,7 @@ impl State<'_> {
                 self.cc.cy = (self.a & 0x01) == 0x01;
             }
 
-            0x08 => {
-                // DAD B
-                let hl = Self::extend(self.h, self.l);
-                let bc = Self::extend(self.b, self.c);
-
-                let answer: u16 = hl + bc;
-
-                Self::assign_ref((&mut self.h, &mut self.l), Self::separate(answer));
-
-                self.carry_flag(answer);
-            }
+            0x08 => {} // NOP
 
             0x09 => {
                 // DAD B
@@ -350,7 +340,7 @@ impl State<'_> {
                 // INX D
                 let answer = Self::extend(self.d, self.e) + 1;
 
-                Self::assign_ref((&mut self.e, &mut self.d), Self::separate(answer));
+                Self::assign_ref((&mut self.d, &mut self.e), Self::separate(answer));
             }
 
             0x14 => {
@@ -456,7 +446,7 @@ impl State<'_> {
                 // INX H
                 let answer = Self::extend(self.h, self.l) + 1;
 
-                Self::assign_ref((&mut self.l, &mut self.h), Self::separate(answer));
+                Self::assign_ref((&mut self.h, &mut self.l), Self::separate(answer));
             }
 
             0x24 => {
